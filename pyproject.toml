@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "tourists"
+version = "0.1.0"
+description = ""
+authors = ["ryo-27 <heren1782@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+flask = "^3.1.2"
+python-dotenv = "^1.1.1"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^25.9.0"
+ruff = "^0.13.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+# Ruffにチェックさせたいルールセットを選択
+# F: Pyflakes (エラー検出)
+# E, W: pycodestyle (警告)
+# I: isort (import順の整理)
+select = ["F", "E", "W", "I"]
+
+[tool.ruff.lint.isort]
+known_first_party = ["tourists_api"] # アプリ名を指定
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+ignore_missing_imports = true
