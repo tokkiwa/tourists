@@ -2,6 +2,8 @@ import os.path
 import base64
 import json
 import time
+import os
+from dotenv import load_dotenv, find_dotenv
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -9,15 +11,24 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from google.cloud import pubsub_v1
 
+# .envファイルのパスを検索し、そのディレクトリを基準にする
+dotenv_path = find_dotenv()
+load_dotenv(dotenv_path)
+dotenv_dir = os.path.dirname(dotenv_path)
+
+
 # --- 設定項目 ---
 # Gmail APIのスコープ (変更不要)
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/pubsub"]
-# GCPプロジェクトID (自分のプロジェクトIDに書き換えてください)
-PROJECT_ID = "fair-sandbox-388708"  # ← ここを書き換える！
+# GCPプロジェクトID (環境変数から取得)
+PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 # Pub/SubのトピックID (GCPで設定したもの)
-PUB_SUB_TOPIC = "gmail-push-notification"
+PUB_SUB_TOPIC = os.getenv("GCP_PUB_SUB_TOPIC")
 # Pub/SubのサブスクリプションID (GCPで設定したもの)
-PUB_SUB_SUBSCRIPTION = "gmail-push-subscription"
+PUB_SUB_SUBSCRIPTION = os.getenv("GCP_PUB_SUB_SUBSCRIPTION")
+# 認証情報ファイルのパス (.envファイルからの相対パス)
+CREDENTIALS_PATH = os.path.join(dotenv_dir, os.getenv("GCP_CREDENTIALS_PATH", "credentials.json"))
+TOKEN_PATH = os.path.join(dotenv_dir, os.getenv("GCP_TOKEN_PATH", "token.json"))
 # ----------------
 
 def get_email_body(msg):
@@ -105,20 +116,24 @@ def process_notification(message: pubsub_v1.subscriber.message.Message, creds, s
         print(f"An error occurred while fetching email details: {error}")
 
 
-def main():
+def start_listening():
     """Gmail APIの認証と監視を開始する"""
     creds = None
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    # token.jsonファイルは、ユーザーのアクセストークンとリフレッシュトークンを保存します。
+    # 最初の認証フローが完了すると自動的に作成されます。
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    # 有効な認証情報がない場合は、ユーザーにログインを促します。
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                "credentials.json", SCOPES
+                CREDENTIALS_PATH, SCOPES
             )
             creds = flow.run_local_server(port=0)
-        with open("token.json", "w") as token:
+        # 次回のために認証情報を保存します。
+        with open(TOKEN_PATH, "w") as token:
             token.write(creds.to_json())
 
     try:
@@ -167,5 +182,5 @@ if __name__ == "__main__":
     if PROJECT_ID == "your-gcp-project-id":
         print("Error: Please set your GCP PROJECT_ID in the script.")
     else:
-        main()
+        start_listening()
 
