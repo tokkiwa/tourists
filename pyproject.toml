@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "tourists"
+name = "tourists_api"
 version = "0.1.0"
 description = ""
 authors = ["ryo-27 <heren1782@gmail.com>"]
