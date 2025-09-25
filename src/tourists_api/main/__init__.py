@@ -1,7 +1,7 @@
+# Blueprintオブジェクトを作成
 from flask import Blueprint
 
-# Blueprintオブジェクトを作成
 bp = Blueprint("main", __name__)
 
-# routes.pyをインポートしてエンドポイントを登録
+# Blueprintの定義後にroutesをインポート
 from . import routes
