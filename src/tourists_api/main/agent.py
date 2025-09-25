@@ -424,31 +424,122 @@ def node_scold_message(state: GraphState) -> GraphState:
 @traced("fetch_user_context")
 def node_fetch_user_context(state: GraphState) -> GraphState:
     """Supabaseからユーザー情報を取得"""
-    # TODO: 実際のSupabase接続コードに置き換える
-    # 以下はサンプルデータ
-    user_context = {
-        "family_structure": "married_with_children",
-        "number_of_children": 0,
-        "occupation": "software_engineer",
-        "birth_date": "1990-05-15",
-        "long_term_plans": [
-            {"plan_name": "台湾旅行", "target_amount": 200000, "target_date": "2026-03"},
-            {"plan_name": "ノートパソコン買い替え", "target_amount": 300000, "target_date": "2026-09"}
-        ],
-        "user_policies": [
-            "健康への投資は最優先事項",
-            "本や学習コンテンツは無制限で購入OK", 
-            "外食は週2回まで、1回3000円以内",
-            "衝動買いは24時間考えてから購入する"
-        ],
-        "transactions": [
-            {"category": "electronics", "transaction_date": "2025-09-20", "store_name": "Amazon", "amount": 15000},
-            {"category": "food", "transaction_date": "2025-09-18", "store_name": "スーパー", "amount": 3500},
-            {"category": "entertainment", "transaction_date": "2025-09-15", "store_name": "Netflix", "amount": 1500}
-        ]
-    }
+    try:
+        from src.tourists_api.supabase_client import supabase
+        from datetime import datetime
+        
+        # ユーザーIDを取得（実際の実装では認証情報から取得）
+        # ここでは仮のユーザーIDを使用（必要に応じて state から取得）
+        user_id = state.get('user_id', '00000000-0000-0000-0000-000000000000')
+        
+        # プロフィール情報を取得
+        profile_response = supabase.table('profiles').select('*').eq('user_id', user_id).execute()
+        
+        # 長期目標を取得
+        goals_response = supabase.table('long_term_plans').select('*').eq('user_id', user_id).execute()
+        
+        # ユーザーポリシーを取得
+        policies_response = supabase.table('user_policies').select('*').eq('user_id', user_id).execute()
+        
+        # 子供情報を取得
+        children_response = supabase.table('children').select('*').eq('user_id', user_id).execute()
+        
+        # 取引履歴を取得（最近1ヶ月）
+        transactions_response = supabase.table('transactions').select('*').eq('user_id', user_id).order('transaction_date', desc=True).limit(20).execute()
+        
+        # プロフィール情報を処理
+        user_context = {}
+        if profile_response.data:
+            profile = profile_response.data[0]
+            user_context.update({
+                'occupation': profile.get('occupation', 'unknown'),
+                'family_structure': 'married_with_children' if profile.get('family_structure') == '既婚' and profile.get('number_of_children', 0) > 0 
+                                 else 'married' if profile.get('family_structure') == '既婚'
+                                 else 'single',
+                'number_of_children': profile.get('number_of_children', 0),
+                'birth_date': profile.get('birth_date', '1990-01-01'),
+                'name': profile.get('name', 'ユーザー')
+            })
+        else:
+            # デフォルト値
+            user_context = {
+                'occupation': 'software_engineer',
+                'family_structure': 'single',
+                'number_of_children': 0,
+                'birth_date': '1990-01-01',
+                'name': 'ユーザー'
+            }
+        
+        # 長期目標を処理
+        long_term_plans = []
+        for goal in goals_response.data:
+            long_term_plans.append({
+                'plan_name': goal.get('plan_name', ''),
+                'target_amount': goal.get('target_amount', 0),
+                'target_date': goal.get('target_date', '')
+            })
+        
+        if not long_term_plans:
+            # デフォルトの目標
+            long_term_plans = [
+                {"plan_name": "緊急資金", "target_amount": 1000000, "target_date": "2025-12-31"},
+                {"plan_name": "旅行資金", "target_amount": 500000, "target_date": "2026-06-30"}
+            ]
+        
+        user_context['long_term_plans'] = long_term_plans
+        
+        # ユーザーポリシーを処理
+        user_policies = []
+        for policy in policies_response.data:
+            if policy.get('policy_text'):
+                user_policies.append(policy['policy_text'])
+        
+        if not user_policies:
+            # デフォルトのポリシー
+            user_policies = [
+                "計画的な支出を心がける",
+                "無駄な買い物は避ける",
+                "健康と学習への投資は優先する"
+            ]
+        
+        user_context['user_policies'] = user_policies
+        
+        # 取引履歴を処理
+        transactions = []
+        for transaction in transactions_response.data:
+            transactions.append({
+                'category': transaction.get('category', 'その他'),
+                'transaction_date': transaction.get('transaction_date', ''),
+                'store_name': transaction.get('store_name', ''),
+                'amount': transaction.get('amount', 0)
+            })
+        
+        user_context['transactions'] = transactions
+        
+        print(f"  fetched user context from Supabase: {len(user_context)} fields")
+        print(f"  - goals: {len(long_term_plans)}, policies: {len(user_policies)}, transactions: {len(transactions)}")
+        
+    except Exception as e:
+        print(f"Supabaseからの情報取得に失敗: {e}")
+        # エラー時はデフォルト値を使用
+        user_context = {
+            "family_structure": "single",
+            "number_of_children": 0,
+            "occupation": "software_engineer",
+            "birth_date": "1990-05-15",
+            "long_term_plans": [
+                {"plan_name": "緊急資金", "target_amount": 1000000, "target_date": "2025-12-31"},
+                {"plan_name": "旅行資金", "target_amount": 500000, "target_date": "2026-06-30"}
+            ],
+            "user_policies": [
+                "計画的な支出を心がける",
+                "無駄な買い物は避ける", 
+                "健康と学習への投資は優先する"
+            ],
+            "transactions": []
+        }
+        print(f"  using default user context: {len(user_context)} fields")
     
-    print(f"  fetched user context: {len(user_context)} fields")
     state["user_context"] = user_context
     return state
 
