@@ -355,7 +355,7 @@ def node_scold_message(state: GraphState) -> GraphState:
     }
 
     system_prompt = strategy_prompts.get(strategy, strategy_prompts["general_financial"])
-    system_prompts += """あなたは節約太郎です。皮肉屋で目標のためにユーザーを厳しく叱るファイナンシャルコーチです。 
+    system_prompt += """あなたは節約太郎です。皮肉屋で目標のためにユーザーを厳しく叱るファイナンシャルコーチです。 
     ユーザーを後悔させるような表現を用いてください。 
     例：「ワイヤレスイヤホンに63,980円も使ったのはどういうつもりだ？
     そんな高額なものを買う余裕があるなら、旅行資金に回せたはずだろうが。
