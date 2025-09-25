@@ -46,7 +46,7 @@ def register_user() -> Response | tuple[Response, int]:
         password = data['password']
         
         if not name or not validate_email(email) or not validate_password(password):
-             return jsonify({"error": "Invalid input provided"}), 400
+            return jsonify({"error": "Invalid input provided"}), 400
 
         auth_response = supabase.auth.sign_up({
             "email": email,
@@ -223,7 +223,7 @@ def get_my_profile() -> Response | tuple[Response, int]:
         
     except Exception as e:
         if "JSON object requested, multiple (or no) rows returned" in str(e):
-             return jsonify({"error": "Profile not found"}), 404
+            return jsonify({"error": "Profile not found"}), 404
         return jsonify({"error": str(e)}), 500
     
 
@@ -631,7 +631,7 @@ def create_user_policy() -> Response | tuple[Response, int]:
 @require_auth
 def get_user_policies() -> Response | tuple[Response, int]:
     """
-    ユーザーポリシー一覧を取得\
+    ユーザーポリシー一覧を取得
     """
     try:
         user_id = g.user.id
