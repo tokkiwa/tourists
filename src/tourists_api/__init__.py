@@ -1,5 +1,7 @@
 import os
+
 from flask import Flask
+
 from .config import config
 from .main import bp as main_blueprint
 

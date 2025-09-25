@@ -1,4 +1,5 @@
 import os
+
 from dotenv import load_dotenv
 
 # .envファイルから環境変数を読み込む
@@ -9,7 +10,10 @@ class Config:
     """ベースとなる設定クラス"""
 
     SECRET_KEY = os.getenv("SECRET_KEY", "a-default-secret-key")
-    # 他の共通設定...
+    
+    # Supabaseの設定
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 
 class DevelopmentConfig(Config):
