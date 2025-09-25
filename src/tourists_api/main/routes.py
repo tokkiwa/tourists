@@ -644,3 +644,216 @@ def get_user_policies() -> Response | tuple[Response, int]:
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ========= 新しいAPI: 叱り通知とチャットボット =========
+
+@bp.route('/api/scolding-notifications', methods=['POST'])
+@require_auth
+def create_scolding_notification() -> Response | tuple[Response, int]:
+    """
+    メールから購入を抽出して叱り通知を生成
+    """
+    try:
+        data = request.get_json()
+        user_id = g.user.id
+        
+        if not data or 'email_content' not in data:
+            return jsonify({"error": "email_content is required"}), 400
+        
+        email_content = data['email_content']
+        
+        # ユーザーの目標を取得
+        goals_response = supabase.table('long_term_plans').select('*').eq('user_id', user_id).execute()
+        user_goals = []
+        for goal in goals_response.data:
+            user_goals.append({
+                "purpose": goal.get('plan_name'),
+                "target_amount": goal.get('target_amount'),
+                "by": goal.get('target_date')
+            })
+        
+        # 現在の日時でメールを処理
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        JST = ZoneInfo("Asia/Tokyo")
+        ts_ymd = datetime.now(JST).strftime("%Y-%m-%d")
+        
+        dated_emails = [{
+            "text": email_content,
+            "ts_ymd": ts_ymd,
+        }]
+        
+        # agentを使って処理
+        from . import agent
+        result = agent.run_agent_once(dated_emails=dated_emails, user_goals=user_goals)
+        
+        # 結果をデータベースに保存（オプション）
+        notification_data = {
+            'user_id': user_id,
+            'message': result.get('message', ''),
+            'should_scold': result.get('should_scold', False),
+            'pace_ratio': result.get('pace_ratio', 0),
+            'spent_amount': result.get('month_spent_jpy_updated', 0),
+            'budget_amount': result.get('month_plan_jpy', 0),
+            'scolding_strategy': result.get('scolding_strategy', 'general_financial'),
+            'created_at': datetime.now(JST).isoformat()
+        }
+        
+        # 通知テーブルに保存（テーブルが存在する場合）
+        try:
+            supabase.table('scolding_notifications').insert(notification_data).execute()
+        except:
+            pass  # テーブルが存在しない場合はスキップ
+        
+        return jsonify({
+            "message": result.get('message', ''),
+            "should_scold": result.get('should_scold', False),
+            "details": {
+                "pace_ratio": result.get('pace_ratio', 0),
+                "spent_amount": int(result.get('month_spent_jpy_updated', 0)),
+                "budget_amount": int(result.get('month_plan_jpy', 0)),
+                "scolding_strategy": result.get('scolding_strategy', 'general_financial'),
+                "return_candidates": len(result.get('return_candidates', [])),
+                "should_open_orders": result.get('should_open_orders', False)
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route('/api/financial-chat', methods=['POST'])
+@require_auth
+def financial_chat() -> Response | tuple[Response, int]:
+    """
+    家計管理に関する相談チャットボット
+    """
+    try:
+        data = request.get_json()
+        user_id = g.user.id
+        
+        if not data or 'message' not in data:
+            return jsonify({"error": "message is required"}), 400
+        
+        user_message = data['message']
+        
+        # ユーザーの情報を取得
+        user_response = supabase.table('user').select('*').eq('id', user_id).execute()
+        goals_response = supabase.table('long_term_plans').select('*').eq('user_id', user_id).execute()
+        policies_response = supabase.table('user_policies').select('*').eq('user_id', user_id).execute()
+        
+        # ユーザーコンテキストを構築
+        user_context = {}
+        if user_response.data:
+            user_data = user_response.data[0]
+            user_context.update({
+                'occupation': user_data.get('occupation'),
+                'birth_date': user_data.get('birth_date'),
+                'family_structure': user_data.get('family_structure'),
+                'number_of_children': user_data.get('number_of_children', 0)
+            })
+        
+        goals_text = "\n".join([f"- {g.get('plan_name')}: {g.get('target_amount')}円 ({g.get('target_date')})" 
+                               for g in goals_response.data])
+        
+        policies_text = "\n".join([f"- {p.get('policy_text')}" 
+                                  for p in policies_response.data])
+        
+        # チャットボット用のプロンプトを作成
+        from langchain_openai import ChatOpenAI
+        from langchain_core.prompts import ChatPromptTemplate
+        
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", """あなたは親しみやすい家計管理アドバイザーです。
+ユーザーの個人的な状況を理解し、実用的で優しいアドバイスを提供してください。
+
+ユーザー情報:
+- 職業: {occupation}
+- 家族構成: {family_structure}
+- 子供の数: {number_of_children}人
+
+長期目標:
+{goals}
+
+支出ポリシー:
+{policies}
+
+以下の点を心がけてください:
+1. 判断的にならず、共感的に対応する
+2. 具体的で実行可能なアドバイスを提供する
+3. ユーザーの目標と現状を考慮した提案をする
+4. 必要に応じて質問で深掘りする
+5. 200-300文字程度で簡潔に回答する"""),
+            
+            ("human", "{user_message}")
+        ])
+        
+        response = llm.invoke(prompt.format_messages(
+            occupation=user_context.get('occupation', '未設定'),
+            family_structure=user_context.get('family_structure', '未設定'),
+            number_of_children=user_context.get('number_of_children', 0),
+            goals=goals_text or "設定されていません",
+            policies=policies_text or "設定されていません",
+            user_message=user_message
+        ))
+        
+        # チャット履歴を保存（オプション）
+        try:
+            chat_data = {
+                'user_id': user_id,
+                'user_message': user_message,
+                'bot_response': response.content,
+                'created_at': datetime.now().isoformat()
+            }
+            supabase.table('chat_history').insert(chat_data).execute()
+        except:
+            pass  # テーブルが存在しない場合はスキップ
+        
+        return jsonify({
+            "response": response.content,
+            "timestamp": datetime.now().isoformat()
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route('/api/scolding-notifications', methods=['GET'])
+@require_auth
+def get_scolding_notifications() -> Response | tuple[Response, int]:
+    """
+    ユーザーの叱り通知履歴を取得
+    """
+    try:
+        user_id = g.user.id
+        
+        response = supabase.table('scolding_notifications').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(20).execute()
+        
+        return jsonify({
+            "notifications": response.data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route('/api/chat-history', methods=['GET'])
+@require_auth
+def get_chat_history() -> Response | tuple[Response, int]:
+    """
+    ユーザーのチャット履歴を取得
+    """
+    try:
+        user_id = g.user.id
+        
+        response = supabase.table('chat_history').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(50).execute()
+        
+        return jsonify({
+            "chat_history": response.data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
