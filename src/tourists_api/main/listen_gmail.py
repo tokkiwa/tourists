@@ -250,7 +250,7 @@ async def _monitor_queue(thread_safe_queue, async_queue):
                     email_info = thread_safe_queue.get_nowait()
                     await async_queue.put(email_info)
                     print(f"Email transferred to async queue: {email_info['subject']}")
-                except:
+                except Exception:
                     break
         except asyncio.CancelledError:
             break
