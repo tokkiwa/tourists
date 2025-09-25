@@ -141,7 +141,7 @@ def process_notification(message: pubsub_v1.subscriber.message.Message, creds, s
                 try:
                     email_queue.put_nowait(email_info)
                     print(f"Email added to queue: {email_info['subject']}")
-                except:
+                except Exception:
                     print("Failed to add email to queue")
 
     except HttpError as error:
