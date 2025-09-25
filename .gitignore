@@ -5,3 +5,4 @@ credentials.json
 token.json
 .DS_Store
 test_**.py
+**.lock
