@@ -354,6 +354,13 @@ def node_scold_message(state: GraphState) -> GraphState:
 ユーザーを後悔させるような表現を用いてください。"""
     }
 
+    strategy_prompts += """あなたは節約太郎です。皮肉屋で目標のためにユーザーを厳しく叱るファイナンシャルコーチです。 
+    ユーザーを後悔させるような表現を用いてください。 
+    例：「ワイヤレスイヤホンに63,980円も使ったのはどういうつもりだ？
+    そんな高額なものを買う余裕があるなら、旅行資金に回せたはずだろうが。
+    Echo Pop スマートスピーカーも5480円だって？そのお金があれば、
+    台湾での美味しい食事や観光に使えたかもしれないのに、何を考えているんだ？」 必ず俺だったらこうする、と自分の意見を入れてください。"""
+
     system_prompt = strategy_prompts.get(strategy, strategy_prompts["general_financial"])
 
     prompt = ChatPromptTemplate.from_messages([
@@ -422,7 +429,7 @@ def node_fetch_user_context(state: GraphState) -> GraphState:
     # 以下はサンプルデータ
     user_context = {
         "family_structure": "married_with_children",
-        "number_of_children": 2,
+        "number_of_children": 0,
         "occupation": "software_engineer",
         "birth_date": "1990-05-15",
         "long_term_plans": [
@@ -430,9 +437,10 @@ def node_fetch_user_context(state: GraphState) -> GraphState:
             {"plan_name": "ノートパソコン買い替え", "target_amount": 300000, "target_date": "2026-09"}
         ],
         "user_policies": [
-            "子供に関する支出は必要投資",
-            "仕事効率を上げる道具への投資は許容",
-            "趣味や娯楽は月5万円まで"
+            "健康への投資は最優先事項",
+            "本や学習コンテンツは無制限で購入OK", 
+            "外食は週2回まで、1回3000円以内",
+            "衝動買いは24時間考えてから購入する"
         ],
         "transactions": [
             {"category": "electronics", "transaction_date": "2025-09-20", "store_name": "Amazon", "amount": 15000},
@@ -467,7 +475,7 @@ def node_decide_scolding_strategy(state: GraphState) -> GraphState:
 
 戦略オプション:
 1. family_focused - 家族・子供への影響を強調
-2. career_focused - 仕事・キャリアへの影響を強調  
+2. career_focused - 仕事・キャリアへの影響を強調
 3. goal_focused - 設定した目標への影響を強調
 4. policy_violation - ユーザー自身のポリシー違反を指摘
 5. pattern_focused - 支出パターンの問題を指摘
