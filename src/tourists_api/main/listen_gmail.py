@@ -19,9 +19,7 @@ from google.cloud import pubsub_v1
 dotenv_path = find_dotenv()
 load_dotenv(dotenv_path)
 dotenv_dir = os.path.dirname(dotenv_path)
-SENDER_LIST = [
-    "shimonmurai@gmail.com", "auto-confirm@amazon.co.jp", "statement@vpass.ne.jp"
-]
+SENDER_LIST = [email.strip() for email in os.getenv("SENDER_LIST", "").split(",") if email.strip()]
 
 # --- 設定項目 ---
 # Gmail APIのスコープ (変更不要)
