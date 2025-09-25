@@ -431,6 +431,24 @@ graph.add_edge("enc_msg", END)
 
 app = graph.compile(checkpointer=InMemorySaver())
 
+# agent.py の末尾などに追記
+from typing import List, Dict
+
+def run_agent_once(dated_emails: List[Dict], user_goals: List[Dict]):
+    """
+    受け取ったメール群（本関数呼び出し時点での受信日をts_ymdとして渡す前提）で
+    LangGraphを1回だけ実行し、最終stateを返す。
+    """
+    init_state = {
+        "dated_emails": dated_emails,  # [{"text": str, "ts_ymd": "YYYY-MM-DD"}, ...]
+        "user_goals": user_goals,      # [{"purpose":..., "target_amount":..., "by":"YYYY-MM"}, ...]
+        # raw_emails は未使用（dated_emails 推奨）
+    }
+    # thread_id は用途に応じてユニーク化してもOK
+    result = app.invoke(init_state, config={"configurable": {"thread_id": "mail-agent-thread"}})
+    return result
+
+
 # ========= 5) 例：実行 =========
 if __name__ == "__main__":
     init: GraphState = {
