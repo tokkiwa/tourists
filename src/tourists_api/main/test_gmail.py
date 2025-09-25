@@ -2,6 +2,7 @@ import os.path
 import base64
 import json
 import time
+import re
 import os
 from dotenv import load_dotenv, find_dotenv
 from google.auth.transport.requests import Request
@@ -15,7 +16,9 @@ from google.cloud import pubsub_v1
 dotenv_path = find_dotenv()
 load_dotenv(dotenv_path)
 dotenv_dir = os.path.dirname(dotenv_path)
-
+SENDER_LIST = [
+    "shimonmurai@gmail.com", "auto-confirm@amazon.co.jp", "statement@vpass.ne.jp"
+]
 
 # --- 設定項目 ---
 # Gmail APIのスコープ (変更不要)
@@ -32,6 +35,21 @@ TOKEN_PATH = os.path.join(dotenv_dir, os.getenv("GCP_TOKEN_PATH", "token.json"))
 # ----------------
 
 def get_email_body(msg):
+    headers = msg["payload"]["headers"]
+    sender_raw = next((h["value"] for h in headers if h["name"] == "From"), "Unknown Sender")
+    subject = next((h["value"] for h in headers if h["name"] == "Subject"), "No Subject")
+
+    # 送信者メールアドレスを抽出
+    match = re.search(r'<(.+?)>', sender_raw)
+    sender_email = match.group(1) if match else sender_raw
+
+    # SENDER_LISTに含まれているかチェック
+    if not any(tracked_sender in sender_email for tracked_sender in SENDER_LIST):
+        print(f"\nSender not tracked: {sender_email}")
+        return None
+
+    print("\n" + "=" * 30)
+    print(f"NEW EMAIL from: {sender_raw}")
     """Gmailメッセージから本文を抽出する"""
     if "parts" in msg["payload"]:
         parts = msg["payload"]["parts"]
