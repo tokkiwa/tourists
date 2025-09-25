@@ -217,7 +217,21 @@ def get_my_profile() -> Response | tuple[Response, int]:
     try:
         user_id = g.user.id
         
-        response = supabase.table('profiles').select('*').eq('user_id', user_id).single().execute()
+        # 認証トークンを取得
+        auth_header = request.headers.get('Authorization')
+        token = auth_header.split(' ')[1] if auth_header else None
+        
+        if not token:
+            return jsonify({"error": "Authentication token is required"}), 401
+        
+        # 認証されたSupabaseクライアントを作成
+        from ..supabase_client import supabase as base_supabase
+        authenticated_supabase = base_supabase
+        
+        # リクエストヘッダーでアクセストークンを設定
+        authenticated_supabase.postgrest.auth(token)
+        
+        response = authenticated_supabase.table('profiles').select('*').eq('user_id', user_id).single().execute()
         
         return jsonify(response.data), 200
         
@@ -241,6 +255,13 @@ def upsert_my_profile() -> Response | tuple[Response, int]:
         if not data:
             return jsonify({"error": "Profile data is required"}), 400
         
+        # 認証トークンを取得
+        auth_header = request.headers.get('Authorization')
+        token = auth_header.split(' ')[1] if auth_header else None
+        
+        if not token:
+            return jsonify({"error": "Authentication token is required"}), 401
+        
         allowed_fields = [
             "name",
             "birth_date",
@@ -256,7 +277,14 @@ def upsert_my_profile() -> Response | tuple[Response, int]:
         
         profile_data['user_id'] = user_id
         
-        response = supabase.table('profiles').upsert(profile_data, on_conflict='user_id').execute()
+        # 認証されたSupabaseクライアントを作成
+        from ..supabase_client import supabase as base_supabase
+        authenticated_supabase = base_supabase
+        
+        # リクエストヘッダーでアクセストークンを設定
+        authenticated_supabase.postgrest.auth(token)
+        
+        response = authenticated_supabase.table('profiles').upsert(profile_data, on_conflict='user_id').execute()
 
         return jsonify(response.data[0]), 200
 
