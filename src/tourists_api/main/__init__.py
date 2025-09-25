@@ -1,7 +1,7 @@
+# Blueprintオブジェクトを作成
 from flask import Blueprint
 
-from . import routes
-
-# Blueprintオブジェクトを作成
 bp = Blueprint("main", __name__)
 
+# Blueprintの定義後にroutesをインポート
+from . import routes

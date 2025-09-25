@@ -1,8 +1,6 @@
 from flask import Response, jsonify
 from postgrest import APIResponse
 
-from tourists_api.supabase import supabase
-
 from . import bp
 
 
@@ -19,8 +17,11 @@ def get_users() -> Response | tuple[Response, int]:
     成功時はResponse、失敗時は現状(Response, status_code)のタプルを返す。
     """
     try:
-        if supabase is None:
-            return jsonify({"error": "Supabase client is not initialized"}), 500
+        # 循環インポートを避けるため関数内でインポート
+        from tourists_api.supabase import get_supabase_client
+
+        # リクエストごとにSupabaseクライアントを取得
+        supabase = get_supabase_client()
         response: APIResponse = supabase.table('user').select('*').execute()
         
         return jsonify(response.data)
