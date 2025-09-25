@@ -106,6 +106,11 @@ class GraphState(TypedDict, total=False):
     should_scold: bool
     message: str
 
+    # 返品関連
+    return_candidates: List[Purchase]   # Amazon等、返品検討対象
+    should_open_orders: bool           # 返品ページを開くべきか
+    open_url: str                      # 既定: 'https://www.amazon.co.jp/gp/css/order-history'
+
 # ========= 2) Models =========
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 extractor = llm.with_structured_output(Purchases)
@@ -370,6 +375,92 @@ def node_scold_message(state: GraphState) -> GraphState:
     state["message"] = msg.content
     return state
 
+# 返品候補抽出: Amazon系で非消耗っぽい・十分高額などを軽規則で候補に
+def is_non_consumable(name: str) -> bool:
+    """簡易ヒューリスティック（必要に応じて拡張）"""
+    ng = ["食品", "生鮮", "飲料", "ギフトカード", "デジタルコード", "ダウンロード", "ポイント"]
+    return not any(tok in name for tok in ng)
+
+@traced("pick_return_candidates")
+def node_pick_return_candidates(state: GraphState) -> GraphState:
+    """返品候補抽出：Amazon系で非消耗品・高額商品を候補に"""
+    cands = []
+    for p in state.get("extracted", []):
+        vendor = (p.vendor or "").lower()
+        # Amazon系の判定を緩くする
+        if ("amazon" in vendor or "amazon.co.jp" in vendor or vendor == "" and "amazon" in p.item_name.lower()):
+            if is_non_consumable(p.item_name):
+                # 閾値を下げる: 3,000円以上
+                if float(p.price) >= 3000 and p.currency.upper() == "JPY":
+                    cands.append(p)
+                    print(f"  candidate added: {p.item_name} / {p.price} {p.currency}")
+    state["return_candidates"] = cands
+    return state
+
+@traced("decide_returnability")
+def node_decide_returnability(state: GraphState) -> GraphState:
+    """返品可否をLLMに判断させる（ツール選択の裁量ポイント）"""
+    cands = state.get("return_candidates", [])
+    if not cands:
+        state["should_open_orders"] = False
+        return state
+
+    # LLMに候補一覧を渡し、「開く価値があるか？」を総合判断させる
+    from langchain_core.prompts import ChatPromptTemplate
+    plist = "\n".join([f"- {p.item_name} / {int(p.price)} {p.currency}" for p in cands])
+    prompt = ChatPromptTemplate.from_messages([
+        ("system",
+         "You are a returns strategist. Based on items and general Amazon JP policies, "
+         "decide if opening the order history page to attempt a return is worthwhile now. "
+         "Be generous in your judgment - if items seem returnable, recommend opening the page. "
+         "Consider non-consumable items, typical 30-day windows, and total potential savings."),
+        ("human",
+         """候補一覧:
+{plist}
+
+判断基準:
+- 非消耗品（電子機器、家電など）は返品可能性が高い
+- 購入から30日以内なら通常返品可能
+- 合計金額が5,000円以上なら検討価値あり
+- 少しでも返品の可能性があれば「開く価値あり」とする
+
+出力はJSONで: {{"open": true|false, "reason": "短文理由"}}""")
+    ])
+    out = llm.invoke(prompt.format_messages(plist=plist)).content
+
+    print(f"  LLM response: {out}")  # デバッグ用に全レスポンスを表示
+
+    # シンプルに true/false を抽出（雑でもOK。堅牢にするなら pydantic で厳密化）
+    import json
+    try:
+        data = json.loads(out)
+        state["should_open_orders"] = bool(data.get("open", False))
+        # 理由をログに載せたい場合
+        print("  decision reason:", data.get("reason", ""))
+    except Exception as e:
+        print(f"  JSON parse failed: {e}")
+        state["should_open_orders"] = False
+
+    # URL設定
+    state["open_url"] = "https://www.amazon.co.jp/gp/css/order-history"
+    return state
+
+@traced("open_orders_page")
+def node_open_orders_page(state: GraphState) -> GraphState:
+    """実行：返品ページを開く"""
+    import webbrowser
+    url = state.get("open_url") or "https://www.amazon.co.jp/gp/css/order-history"
+    webbrowser.open(url)
+    print(f"  opened URL: {url}")
+    return state
+
+def route_return_open(state: GraphState) -> str:
+    """decide_returnabilityの結果で分岐"""
+    route = "OPEN" if state.get("should_open_orders") else "SKIP"
+    now = datetime.now(JST).strftime("%H:%M:%S")
+    print(f"[{now}] ➜ ROUTE return -> {route}")
+    return route
+
 @traced("enc_msg")
 def node_encourage_message(state: GraphState) -> GraphState:
     """順調時の短い応援メッセージ"""
@@ -413,6 +504,11 @@ graph.add_node("judge", node_should_scold)
 graph.add_node("scold_msg", node_scold_message)
 graph.add_node("enc_msg", node_encourage_message)
 
+# 返品関連ノードを追加
+graph.add_node("pick_return_candidates", node_pick_return_candidates)
+graph.add_node("decide_returnability", node_decide_returnability)
+graph.add_node("open_orders_page", node_open_orders_page)
+
 graph.add_edge(START, "init_month")
 graph.add_edge("init_month", "extract")
 graph.add_edge("extract", "estimate_monthly_saving_need")
@@ -426,10 +522,43 @@ graph.add_conditional_edges(
     route_scold,
     {"SCOLD": "scold_msg", "ENCOURAGE": "enc_msg"},
 )
-graph.add_edge("scold_msg", END)
+
+# 叱りルートに返品フローを追加
+graph.add_edge("scold_msg", "pick_return_candidates")
+graph.add_edge("pick_return_candidates", "decide_returnability")
+
+graph.add_conditional_edges(
+    "decide_returnability",
+    route_return_open,
+    {
+        "OPEN": "open_orders_page",
+        "SKIP": END,
+    },
+)
+graph.add_edge("open_orders_page", END)
+
+# 励ましはそのまま
 graph.add_edge("enc_msg", END)
 
 app = graph.compile(checkpointer=InMemorySaver())
+
+# agent.py の末尾などに追記
+from typing import List, Dict
+
+def run_agent_once(dated_emails: List[Dict], user_goals: List[Dict]):
+    """
+    受け取ったメール群（本関数呼び出し時点での受信日をts_ymdとして渡す前提）で
+    LangGraphを1回だけ実行し、最終stateを返す。
+    """
+    init_state = {
+        "dated_emails": dated_emails,  # [{"text": str, "ts_ymd": "YYYY-MM-DD"}, ...]
+        "user_goals": user_goals,      # [{"purpose":..., "target_amount":..., "by":"YYYY-MM"}, ...]
+        # raw_emails は未使用（dated_emails 推奨）
+    }
+    # thread_id は用途に応じてユニーク化してもOK
+    result = app.invoke(init_state, config={"configurable": {"thread_id": "mail-agent-thread"}})
+    return result
+
 
 # ========= 5) 例：実行 =========
 if __name__ == "__main__":
@@ -461,4 +590,9 @@ if __name__ == "__main__":
     print("spent (this month):", int(result["month_spent_jpy_updated"]))
     print("pace_ratio       :", f"{result['pace_ratio']:.3f}")
     print("should_scold     :", result["should_scold"])
+    print("return_candidates:", len(result.get("return_candidates", [])))
+    if result.get("return_candidates"):
+        for c in result["return_candidates"]:
+            print(f"  - {c.item_name}: {int(c.price)} {c.currency}")
+    print("should_open_orders:", result.get("should_open_orders", False))
     print(result["message"])
