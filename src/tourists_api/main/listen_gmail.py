@@ -286,7 +286,7 @@ async def process_emails_from_queue(email_queue: asyncio.Queue):
 async def main():
     """メイン関数"""
     # GCPプロジェクトIDが設定されているか確認
-    if PROJECT_ID == "your-gcp-project-id":
+    if not PROJECT_ID or PROJECT_ID == "your-gcp-project-id":
         print("Error: Please set your GCP PROJECT_ID in the script.")
         return
     
