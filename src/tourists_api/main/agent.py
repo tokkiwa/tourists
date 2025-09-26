@@ -114,6 +114,7 @@ class GraphState(TypedDict, total=False):
     # 叱り方決定関連
     user_context: Dict                 # DBから取得したユーザー情報
     scolding_strategy: str             # 叱り方の戦略
+    personalized_message: str          # パーソナライズされた叱りメッセージ
 
 # ========= 2) Models =========
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
@@ -310,6 +311,12 @@ def node_should_scold(state: GraphState) -> GraphState:
 @traced("scold_msg")
 def node_scold_message(state: GraphState) -> GraphState:
     """戦略に基づいて個別化された叱りメッセージを生成"""
+    # 新しいパーソナライズされたメッセージがあればそれを使用
+    if state.get("personalized_message"):
+        state["message"] = state["personalized_message"]
+        return state
+    
+    # 従来の戦略ベースの叱りメッセージ生成（フォールバック）
     plan = float(state["month_plan_jpy"])
     spent = float(state["month_spent_jpy_updated"])
     month_id = state["month_id"]
@@ -444,8 +451,10 @@ def node_fetch_user_context(state: GraphState) -> GraphState:
         # 子供情報を取得
         children_response = supabase.table('children').select('*').eq('user_id', user_id).execute()
         
-        # 取引履歴を取得（最近1ヶ月）
-        transactions_response = supabase.table('transactions').select('*').eq('user_id', user_id).order('transaction_date', desc=True).limit(20).execute()
+        # 取引履歴を取得（最近3ヶ月）
+        from datetime import timedelta
+        three_months_ago = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
+        transactions_response = supabase.table('transactions').select('*').eq('user_id', user_id).gte('transaction_date', three_months_ago).order('transaction_date', desc=True).execute()
         
         # プロフィール情報を処理
         user_context = {}
@@ -533,10 +542,36 @@ def node_fetch_user_context(state: GraphState) -> GraphState:
             ],
             "user_policies": [
                 "計画的な支出を心がける",
-                "無駄な買い物は避ける", 
+                "無駄な買い物は避ける",
                 "健康と学習への投資は優先する"
             ],
-            "transactions": []
+            "transactions": [
+                {"category": "PC・周辺機器", "transaction_date": "2025-09-22", "store_name": "Amazon.co.jp", "amount": 24800},
+                {"category": "スマートデバイス", "transaction_date": "2025-09-20", "store_name": "楽天市場", "amount": 45600},
+                {"category": "PC・周辺機器", "transaction_date": "2025-09-18", "store_name": "Amazon.co.jp", "amount": 18900},
+                {"category": "食品・グルメ", "transaction_date": "2025-09-10", "store_name": "Amazon.co.jp", "amount": 5800},
+                {"category": "デジタルコンテンツ", "transaction_date": "2025-09-09", "store_name": "楽天市場", "amount": 2980},
+                {"category": "PC・周辺機器", "transaction_date": "2025-09-05", "store_name": "Amazon.co.jp", "amount": 8750},
+                {"category": "スマートデバイス", "transaction_date": "2025-09-03", "store_name": "楽天市場", "amount": 12800},
+                {"category": "家電・AV機器", "transaction_date": "2025-08-28", "store_name": "Amazon.co.jp", "amount": 32400},
+                {"category": "PC・周辺機器", "transaction_date": "2025-08-25", "store_name": "楽天市場", "amount": 15600},
+                {"category": "スマートデバイス", "transaction_date": "2025-08-22", "store_name": "Amazon.co.jp", "amount": 67800},
+                {"category": "PC・周辺機器", "transaction_date": "2025-08-19", "store_name": "Amazon.co.jp", "amount": 4980},
+                {"category": "ファッション・衣類", "transaction_date": "2025-08-17", "store_name": "楽天市場", "amount": 6750},
+                {"category": "家電・AV機器", "transaction_date": "2025-08-14", "store_name": "Amazon.co.jp", "amount": 28900},
+                {"category": "PC・周辺機器", "transaction_date": "2025-08-12", "store_name": "楽天市場", "amount": 9800},
+                {"category": "スマートデバイス", "transaction_date": "2025-08-09", "store_name": "Amazon.co.jp", "amount": 21500},
+                {"category": "書籍・雑誌", "transaction_date": "2025-08-06", "store_name": "Amazon.co.jp", "amount": 2400},
+                {"category": "健康・美容", "transaction_date": "2025-08-05", "store_name": "楽天市場", "amount": 4200},
+                {"category": "PC・周辺機器", "transaction_date": "2025-08-02", "store_name": "Amazon.co.jp", "amount": 16700},
+                {"category": "家電・AV機器", "transaction_date": "2025-07-30", "store_name": "楽天市場", "amount": 42300},
+                {"category": "スマートデバイス", "transaction_date": "2025-07-28", "store_name": "Amazon.co.jp", "amount": 89600},
+                {"category": "PC・周辺機器", "transaction_date": "2025-07-25", "store_name": "Amazon.co.jp", "amount": 7200},
+                {"category": "デジタルコンテンツ", "transaction_date": "2025-07-22", "store_name": "楽天市場", "amount": 3980},
+                {"category": "PC・周辺機器", "transaction_date": "2025-07-18", "store_name": "Amazon.co.jp", "amount": 13500},
+                {"category": "スマートデバイス", "transaction_date": "2025-07-15", "store_name": "楽天市場", "amount": 36800},
+                {"category": "家電・AV機器", "transaction_date": "2025-07-12", "store_name": "Amazon.co.jp", "amount": 19800}
+            ]
         }
         print(f"  using default user context: {len(user_context)} fields")
     
@@ -545,7 +580,7 @@ def node_fetch_user_context(state: GraphState) -> GraphState:
 
 @traced("decide_scolding_strategy")
 def node_decide_scolding_strategy(state: GraphState) -> GraphState:
-    """ユーザー情報と購入内容に基づいて叱り方を決める"""
+    """ユーザー情報と購入内容に基づいて、カテゴリ別購入履歴を分析してパーソナライズされた叱りを生成"""
     user_context = state.get("user_context", {})
     extracted = state.get("extracted", [])
     month_id = state.get("month_id", "")
@@ -553,80 +588,134 @@ def node_decide_scolding_strategy(state: GraphState) -> GraphState:
     # 今月の購入のみフィルタ
     current_purchases = [p for p in extracted if p.ym == month_id]
     
-    # LLMに叱り戦略を決定させる
-    purchases_text = "\n".join([f"- {p.item_name}: {int(p.price)}円 ({p.vendor or 'unknown'})" 
-                               for p in current_purchases])
+    if not current_purchases:
+        state["scolding_strategy"] = "general_financial"
+        return state
+    
+    # 過去3ヶ月の取引履歴を取得
+    past_transactions = user_context.get("transactions", [])
+    
+    # 現在の購入をカテゴリ別にマッピング
+    category_mapping = {
+        # ガジェット・PC関連
+        "PC・周辺機器": ["キーボード", "マウス", "モニター", "ヘッドセット", "ケーブル", "USB", "HDD", "SSD", "メモリ", "CPU", "GPU", "マザーボード"],
+        "スマートデバイス": ["スマートウォッチ", "タブレット", "スマートスピーカー", "Echo", "スマホ", "iPhone", "Android", "ワイヤレスイヤホン", "AirPods"],
+        "家電・AV機器": ["テレビ", "プロジェクター", "スピーカー", "オーディオ", "ドライヤー", "掃除機", "炊飯器", "冷蔵庫", "洗濯機"],
+        # その他
+        "食品・グルメ": ["食品", "飲料", "お菓子", "調味料", "米", "肉", "野菜"],
+        "ファッション・衣類": ["服", "シャツ", "パンツ", "靴", "バッグ", "アクセサリー", "時計"],
+        "書籍・雑誌": ["本", "書籍", "雑誌", "漫画", "小説", "参考書"],
+        "健康・美容": ["化粧品", "サプリ", "シャンプー", "石鹸", "薬", "マスク"],
+        "デジタルコンテンツ": ["ゲーム", "アプリ", "音楽", "映画", "電子書籍"]
+    }
+    
+    # カテゴリ別の分析を実行
+    category_analysis = {}
+    
+    # 現在の購入品をカテゴリに分類し、分析に追加
+    for purchase in current_purchases:
+        item_name = purchase.item_name.lower()
+        assigned_category = "その他"  # デフォルト
+        
+        # カテゴリ判定
+        for category, keywords in category_mapping.items():
+            if any(keyword.lower() in item_name for keyword in keywords):
+                assigned_category = category
+                break
+        
+        # カテゴリ分析辞書に追加
+        if assigned_category not in category_analysis:
+            # そのカテゴリの過去3ヶ月の購入を集計
+            past_same_category = [t for t in past_transactions if t.get('category') == assigned_category]
+            past_count = len(past_same_category)
+            past_total_amount = sum(t.get('amount', 0) for t in past_same_category)
+            
+            category_analysis[assigned_category] = {
+                "current_purchases": [],
+                "past_count": past_count,
+                "past_total_amount": past_total_amount,
+                "past_items": past_same_category
+            }
+        
+        # 現在の購入をカテゴリに追加
+        category_analysis[assigned_category]["current_purchases"].append(purchase)
+    
+    # LLMにパーソナライズされた叱りメッセージを生成させる
+    analysis_text = ""
+    total_current_amount = 0
+    for category, data in category_analysis.items():
+        current_items = data["current_purchases"]
+        current_amount = sum(p.price for p in current_items)
+        total_current_amount += current_amount
+        
+        analysis_text += f"\n【{category}】\n"
+        analysis_text += f"今回の購入: {len(current_items)}件, {int(current_amount):,}円\n"
+        for item in current_items:
+            analysis_text += f"  - {item.item_name}: {int(item.price):,}円\n"
+        
+        analysis_text += f"過去3ヶ月の購入: {data['past_count']}件, {int(data['past_total_amount']):,}円\n"
+        if data["past_items"]:
+            analysis_text += "過去の購入履歴:\n"
+            for item in data["past_items"][:5]:  # 最新5件のみ表示
+                analysis_text += f"  - {item.get('transaction_date')}: {item.get('store_name')}で{int(item.get('amount', 0)):,}円\n"
     
     prompt = ChatPromptTemplate.from_messages([
         ("system", 
-         """あなたは個人に最適化された叱り方を決めるストラテジストです。
-ユーザーの個人情報、家族構成、職業、目標、支出ポリシー、購入履歴を基に、
-最も効果的な叱り方のアプローチを決定してください。
+         """あなたは節約太郎です。皮肉屋で目標のためにユーザーを厳しく叱るパーソナライズされたファイナンシャルコーチです。
 
-戦略オプション:
-1. family_focused - 家族・子供への影響を強調
-2. career_focused - 仕事・キャリアへの影響を強調
-3. goal_focused - 設定した目標への影響を強調
-4. policy_violation - ユーザー自身のポリシー違反を指摘
-5. pattern_focused - 支出パターンの問題を指摘
-6. general_financial - 一般的な家計管理の観点"""),
+ユーザーの購入履歴を詳細に分析し、カテゴリ別の購入パターンの問題点を具体的に指摘してください。
+
+叱り方のポイント:
+1. 同じカテゴリでの過去の浪費パターンを具体的に指摘
+2. 「またガジェットですか？」「本当に必要だったのですか？」のような皮肉を交える
+3. 過去の購入金額と今回を合わせた累計金額の大きさを強調
+4. 「俺だったらこうする」という自分なりの提案を必ず入れる
+5. ユーザーの目標達成への影響を具体的に計算して示す
+
+必ず日本語で、辛辣だが建設的なメッセージを生成してください。"""),
         
         ("human", """
 ユーザー情報:
 - 家族構成: {family_structure}
-- 子供の数: {number_of_children}
+- 子供の数: {number_of_children}人
 - 職業: {occupation}
-- 生年月日: {birth_date}
 
-長期目標:
-{long_term_plans}
+ユーザーの目標:
+{goals}
 
-支出ポリシー:
-{user_policies}
+詳細な購入分析:
+{analysis}
 
-直近の取引履歴:
-{transactions}
+現在の月間予算: {plan:,}円
+今月の総支出: {spent:,}円
 
-今月の問題のある購入:
-{purchases}
-
-上記を踏まえ、最も効果的な叱り戦略を1つ選んで、理由とともにJSONで回答:
-{{"strategy": "family_focused", "reason": "理由説明", "key_points": ["重要ポイント1", "重要ポイント2"]}}
+上記の分析に基づき、カテゴリ別の購入パターンの問題点を具体的に指摘し、
+「俺だったらこうする」という提案も含めた厳しい叱責メッセージを生成してください。
 """)
     ])
     
     # フォーマット用データ準備
-    plans_text = "\n".join([f"- {p['plan_name']}: {p['target_amount']}円 ({p['target_date']})" 
-                           for p in user_context.get("long_term_plans", [])])
-    policies_text = "\n".join([f"- {p}" for p in user_context.get("user_policies", [])])
-    transactions_text = "\n".join([f"- {t['category']}: {t['amount']}円 @ {t['store_name']} ({t['transaction_date']})" 
-                                  for t in user_context.get("transactions", [])])
+    goals_lines = []
+    for g in state.get("user_goals", []) or []:
+        goals_lines.append(f"- {g.get('purpose','?')}：{g.get('target_amount','?')}円 / 期限 {g.get('by','?')}")
+    goals_text = "\n".join(goals_lines) or "（目標未設定）"
     
     response = llm.invoke(prompt.format_messages(
         family_structure=user_context.get("family_structure", "unknown"),
         number_of_children=user_context.get("number_of_children", 0),
         occupation=user_context.get("occupation", "unknown"),
-        birth_date=user_context.get("birth_date", "unknown"),
-        long_term_plans=plans_text,
-        user_policies=policies_text,
-        transactions=transactions_text,
-        purchases=purchases_text
-    )).content
+        goals=goals_text,
+        analysis=analysis_text,
+        plan=int(state.get("month_plan_jpy", 0)),
+        spent=int(state.get("month_spent_jpy_updated", 0))
+    ))
     
-    print(f"  strategy response: {response}")
+    print(f"  personalized scolding generated based on category analysis")
+    print(f"  analyzed categories: {list(category_analysis.keys())}")
     
-    # JSON解析
-    import json
-    import re
-    try:
-        strategy_data = json.loads(response.strip())
-        state["scolding_strategy"] = strategy_data.get("strategy", "general_financial")
-        print(f"  selected strategy: {strategy_data.get('strategy')}")
-        print(f"  reason: {strategy_data.get('reason', '')}")
-    except:
-        # フォールバック
-        state["scolding_strategy"] = "general_financial"
-        print("  fallback to general_financial strategy")
+    # パーソナライズされたメッセージを直接stateに保存
+    state["scolding_strategy"] = "personalized_category_based"
+    state["personalized_message"] = response.content
     
     return state
 
