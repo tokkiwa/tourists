@@ -4,10 +4,12 @@ from flask import Response, g, jsonify, request
 from gotrue.errors import AuthError
 from postgrest import APIResponse
 
-from src.tourists_api.supabase_client import supabase
+from tourists_api.supabase_client import supabase
 
 from ..utils.auth import require_auth, validate_email, validate_password
 from . import bp
+from .mailAgent import main as mail_agent_main
+
 
 
 @bp.route("/")

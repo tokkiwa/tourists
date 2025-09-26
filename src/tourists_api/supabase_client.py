@@ -1,6 +1,12 @@
 from supabase import create_client
+import sys
+import pathlib
 
-from .config import Config
+# 現在のディレクトリをsys.pathに追加
+current_dir = pathlib.Path(__file__).parent
+sys.path.insert(0, str(current_dir))
+
+from config import Config
 
 SUPABASE_URL = Config.SUPABASE_URL
 SUPABASE_KEY = Config.SUPABASE_KEY
