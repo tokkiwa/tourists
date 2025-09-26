@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: tourists-api
+    env: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "poetry run gunicorn --workers 4 --bind 0.0.0.0:$PORT \"src.tourists_api.__init__:create_app()\""
