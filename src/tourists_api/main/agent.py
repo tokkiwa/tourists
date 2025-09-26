@@ -533,10 +533,36 @@ def node_fetch_user_context(state: GraphState) -> GraphState:
             ],
             "user_policies": [
                 "計画的な支出を心がける",
-                "無駄な買い物は避ける", 
+                "無駄な買い物は避ける",
                 "健康と学習への投資は優先する"
             ],
-            "transactions": []
+            "transactions": [
+                {"category": "PC・周辺機器", "transaction_date": "2025-09-22", "store_name": "Amazon.co.jp", "amount": 24800},
+                {"category": "スマートデバイス", "transaction_date": "2025-09-20", "store_name": "楽天市場", "amount": 45600},
+                {"category": "PC・周辺機器", "transaction_date": "2025-09-18", "store_name": "Amazon.co.jp", "amount": 18900},
+                {"category": "食品・グルメ", "transaction_date": "2025-09-10", "store_name": "Amazon.co.jp", "amount": 5800},
+                {"category": "デジタルコンテンツ", "transaction_date": "2025-09-09", "store_name": "楽天市場", "amount": 2980},
+                {"category": "PC・周辺機器", "transaction_date": "2025-09-05", "store_name": "Amazon.co.jp", "amount": 8750},
+                {"category": "スマートデバイス", "transaction_date": "2025-09-03", "store_name": "楽天市場", "amount": 12800},
+                {"category": "家電・AV機器", "transaction_date": "2025-08-28", "store_name": "Amazon.co.jp", "amount": 32400},
+                {"category": "PC・周辺機器", "transaction_date": "2025-08-25", "store_name": "楽天市場", "amount": 15600},
+                {"category": "スマートデバイス", "transaction_date": "2025-08-22", "store_name": "Amazon.co.jp", "amount": 67800},
+                {"category": "PC・周辺機器", "transaction_date": "2025-08-19", "store_name": "Amazon.co.jp", "amount": 4980},
+                {"category": "ファッション・衣類", "transaction_date": "2025-08-17", "store_name": "楽天市場", "amount": 6750},
+                {"category": "家電・AV機器", "transaction_date": "2025-08-14", "store_name": "Amazon.co.jp", "amount": 28900},
+                {"category": "PC・周辺機器", "transaction_date": "2025-08-12", "store_name": "楽天市場", "amount": 9800},
+                {"category": "スマートデバイス", "transaction_date": "2025-08-09", "store_name": "Amazon.co.jp", "amount": 21500},
+                {"category": "書籍・雑誌", "transaction_date": "2025-08-06", "store_name": "Amazon.co.jp", "amount": 2400},
+                {"category": "健康・美容", "transaction_date": "2025-08-05", "store_name": "楽天市場", "amount": 4200},
+                {"category": "PC・周辺機器", "transaction_date": "2025-08-02", "store_name": "Amazon.co.jp", "amount": 16700},
+                {"category": "家電・AV機器", "transaction_date": "2025-07-30", "store_name": "楽天市場", "amount": 42300},
+                {"category": "スマートデバイス", "transaction_date": "2025-07-28", "store_name": "Amazon.co.jp", "amount": 89600},
+                {"category": "PC・周辺機器", "transaction_date": "2025-07-25", "store_name": "Amazon.co.jp", "amount": 7200},
+                {"category": "デジタルコンテンツ", "transaction_date": "2025-07-22", "store_name": "楽天市場", "amount": 3980},
+                {"category": "PC・周辺機器", "transaction_date": "2025-07-18", "store_name": "Amazon.co.jp", "amount": 13500},
+                {"category": "スマートデバイス", "transaction_date": "2025-07-15", "store_name": "楽天市場", "amount": 36800},
+                {"category": "家電・AV機器", "transaction_date": "2025-07-12", "store_name": "Amazon.co.jp", "amount": 19800}
+            ]
         }
         print(f"  using default user context: {len(user_context)} fields")
     
