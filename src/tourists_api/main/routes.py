@@ -16,20 +16,31 @@ def health_check() -> Response:
     return jsonify({"status": "ok"})
 
 
-@bp.route('/api/users', methods=['GET'])
+@bp.before_request
+def handle_preflight():
+    """プリフライトリクエスト（OPTIONS）に対応"""
+    if request.method == "OPTIONS":
+        response = Response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "*")
+        response.headers.add("Access-Control-Allow-Methods", "*")
+        return response
+
+
+@bp.route('/users', methods=['GET'])
 def get_users() -> Response | tuple[Response, int]:
     """
-    userのリストを取得する。
+    userのリストを取得する（profilesテーブルから）。
     """
     try:
-        response: APIResponse = supabase.table('user').select('*').execute()
+        response: APIResponse = supabase.table('profiles').select('*').execute()
         return jsonify(response.data)
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route('/api/auth/register', methods=['POST'])
+@bp.route('/auth/register', methods=['POST'])
 def register_user() -> Response | tuple[Response, int]:
     """
     Supabase Authを使用してユーザーを登録する。
@@ -70,7 +81,7 @@ def register_user() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
     
 
-@bp.route('/api/auth/login', methods=['POST'])
+@bp.route('/auth/login', methods=['POST'])
 def login_user() -> Response | tuple[Response, int]:
     """
     Supabase Authを使用してログインする
@@ -120,7 +131,7 @@ def login_user() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 401
     
 
-@bp.route('/api/children', methods=['POST'])
+@bp.route('/children', methods=['POST'])
 @require_auth
 def add_child() -> Response | tuple[Response, int]:
     """
@@ -160,7 +171,7 @@ def add_child() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
     
 
-@bp.route('/api/children', methods=['GET'])
+@bp.route('/children', methods=['GET'])
 @require_auth
 def get_children() -> Response | tuple[Response, int]:
     """
@@ -181,7 +192,7 @@ def get_children() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
     
 
-@bp.route('/api/children/<int:child_id>', methods=['DELETE'])
+@bp.route('/children/<int:child_id>', methods=['DELETE'])
 @require_auth
 def delete_child(child_id: int) -> Response | tuple[Response, int]:
     """
@@ -208,7 +219,7 @@ def delete_child(child_id: int) -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
     
 
-@bp.route('/api/profiles/me', methods=['GET'])
+@bp.route('/profiles/me', methods=['GET'])
 @require_auth
 def get_my_profile() -> Response | tuple[Response, int]:
     """
@@ -241,7 +252,7 @@ def get_my_profile() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
     
 
-@bp.route('/api/profiles/me', methods=['PUT'])
+@bp.route('/profiles/me', methods=['PUT'])
 @require_auth
 def upsert_my_profile() -> Response | tuple[Response, int]:
     """
@@ -292,7 +303,7 @@ def upsert_my_profile() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route('/api/profile', methods=['GET'])
+@bp.route('/profile', methods=['GET'])
 @require_auth
 def get_profile() -> Response | tuple[Response, int]:
     """
@@ -313,7 +324,7 @@ def get_profile() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route('/api/transactions', methods=['POST'])
+@bp.route('/transactions', methods=['POST'])
 @require_auth
 def add_transaction() -> Response | tuple[Response, int]:
     """
@@ -361,7 +372,7 @@ def add_transaction() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
     
 
-@bp.route('/api/transactions', methods=['GET'])
+@bp.route('/transactions', methods=['GET'])
 @require_auth
 def get_transactions() -> Response | tuple[Response, int]:
     """
@@ -406,7 +417,7 @@ def get_transactions() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
     
 
-@bp.route('/api/transactions/<int:transaction_id>', methods=['PUT'])
+@bp.route('/transactions/<int:transaction_id>', methods=['PUT'])
 @require_auth
 def update_transaction(transaction_id: int) -> Response | tuple[Response, int]:
     """
@@ -462,7 +473,7 @@ def update_transaction(transaction_id: int) -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route('/api/transactions/<int:transaction_id>', methods=['DELETE'])
+@bp.route('/transactions/<int:transaction_id>', methods=['DELETE'])
 @require_auth
 def delete_transaction(transaction_id: int) -> Response | tuple[Response, int]:
     """
@@ -489,7 +500,7 @@ def delete_transaction(transaction_id: int) -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
     
 
-@bp.route('/api/long-term-plans', methods=['POST'])
+@bp.route('/long-term-plans', methods=['POST'])
 @require_auth
 def create_long_term_plan() -> Response | tuple[Response, int]:
     """
@@ -533,7 +544,7 @@ def create_long_term_plan() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route('/api/long-term-plans', methods=['GET'])
+@bp.route('/long-term-plans', methods=['GET'])
 @require_auth
 def get_long_term_plans() -> Response | tuple[Response, int]:
     """
@@ -554,7 +565,7 @@ def get_long_term_plans() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route('/api/short-term-plans', methods=['POST'])
+@bp.route('/short-term-plans', methods=['POST'])
 @require_auth
 def create_short_term_plan() -> Response | tuple[Response, int]:
     """
@@ -600,7 +611,7 @@ def create_short_term_plan() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
     
 
-@bp.route('/api/short-term-plans', methods=['GET'])
+@bp.route('/short-term-plans', methods=['GET'])
 @require_auth
 def get_short_term_plans() -> Response | tuple[Response, int]:
     """
@@ -621,7 +632,7 @@ def get_short_term_plans() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route('/api/user-policies', methods=['POST'])
+@bp.route('/user-policies', methods=['POST'])
 @require_auth
 def create_user_policy() -> Response | tuple[Response, int]:
     """
@@ -655,7 +666,7 @@ def create_user_policy() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
     
 
-@bp.route('/api/user-policies', methods=['GET'])
+@bp.route('/user-policies', methods=['GET'])
 @require_auth
 def get_user_policies() -> Response | tuple[Response, int]:
     """
@@ -676,7 +687,7 @@ def get_user_policies() -> Response | tuple[Response, int]:
 
 # ========= 新しいAPI: 叱り通知とチャットボット =========
 
-@bp.route('/api/scolding-notifications', methods=['POST'])
+@bp.route('/scolding-notifications', methods=['POST'])
 @require_auth
 def create_scolding_notification() -> Response | tuple[Response, int]:
     """
@@ -751,7 +762,7 @@ def create_scolding_notification() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route('/api/financial-chat', methods=['POST'])
+@bp.route('/financial-chat', methods=['POST'])
 @require_auth
 def financial_chat() -> Response | tuple[Response, int]:
     """
@@ -766,27 +777,65 @@ def financial_chat() -> Response | tuple[Response, int]:
         
         user_message = data['message']
         
-        # ユーザーの情報を取得
-        user_response = supabase.table('user').select('*').eq('id', user_id).execute()
-        goals_response = supabase.table('long_term_plans').select('*').eq('user_id', user_id).execute()
-        policies_response = supabase.table('user_policies').select('*').eq('user_id', user_id).execute()
+        # ユーザーの情報を取得（認証済みクライアントを使用）
+        try:
+            # 認証トークンを取得
+            auth_header = request.headers.get('Authorization')
+            token = auth_header.split(' ')[1] if auth_header else None
+            
+            if token:
+                # 認証されたSupabaseクライアントを作成
+                from ..supabase_client import supabase as base_supabase
+                authenticated_supabase = base_supabase
+                authenticated_supabase.postgrest.auth(token)
+                
+                print(f"Fetching profile for user_id: {user_id}")
+                user_response = authenticated_supabase.table('profiles').select('*').eq('user_id', user_id).execute()
+                print(f"User response: {user_response.data}")
+            else:
+                user_response = None
+        except Exception as e:
+            print(f"Error fetching user profile: {e}")
+            user_response = None
+        
+        # 長期計画と支出ポリシーの取得（テーブルが存在しない場合のエラーハンドリング）
+        try:
+            goals_response = supabase.table('long_term_plans').select('*').eq('user_id', user_id).execute()
+        except Exception as e:
+            print(f"Long term plans table not found: {e}")
+            goals_response = None
+            
+        try:
+            policies_response = supabase.table('user_policies').select('*').eq('user_id', user_id).execute()
+        except Exception as e:
+            print(f"User policies table not found: {e}")
+            policies_response = None
         
         # ユーザーコンテキストを構築
-        user_context = {}
-        if user_response.data:
+        user_context = {
+            'occupation': '未設定',
+            'family_structure': '未設定',
+            'number_of_children': 0
+        }
+        
+        if user_response and user_response.data:
             user_data = user_response.data[0]
             user_context.update({
-                'occupation': user_data.get('occupation'),
+                'occupation': user_data.get('occupation', '未設定'),
                 'birth_date': user_data.get('birth_date'),
-                'family_structure': user_data.get('family_structure'),
+                'family_structure': user_data.get('family_structure', '未設定'),
                 'number_of_children': user_data.get('number_of_children', 0)
             })
         
-        goals_text = "\n".join([f"- {g.get('plan_name')}: {g.get('target_amount')}円 ({g.get('target_date')})" 
-                               for g in goals_response.data])
+        goals_text = "設定されていません"
+        if goals_response and goals_response.data:
+            goals_text = "\n".join([f"- {g.get('plan_name')}: {g.get('target_amount')}円 ({g.get('target_date')})" 
+                                   for g in goals_response.data])
         
-        policies_text = "\n".join([f"- {p.get('policy_text')}" 
-                                  for p in policies_response.data])
+        policies_text = "設定されていません"
+        if policies_response and policies_response.data:
+            policies_text = "\n".join([f"- {p.get('policy_text')}" 
+                                      for p in policies_response.data])
         
         # チャットボット用のプロンプトを作成
         from langchain_openai import ChatOpenAI
@@ -823,8 +872,8 @@ def financial_chat() -> Response | tuple[Response, int]:
             occupation=user_context.get('occupation', '未設定'),
             family_structure=user_context.get('family_structure', '未設定'),
             number_of_children=user_context.get('number_of_children', 0),
-            goals=goals_text or "設定されていません",
-            policies=policies_text or "設定されていません",
+            goals=goals_text,
+            policies=policies_text,
             user_message=user_message
         ))
         
@@ -849,7 +898,7 @@ def financial_chat() -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route('/api/scolding-notifications', methods=['GET'])
+@bp.route('/scolding-notifications', methods=['GET'])
 @require_auth
 def get_scolding_notifications() -> Response | tuple[Response, int]:
     """
@@ -857,18 +906,23 @@ def get_scolding_notifications() -> Response | tuple[Response, int]:
     """
     try:
         user_id = g.user.id
+        print(f"Debug: Fetching notifications for user_id: {user_id}")
         
-        response = supabase.table('scolding_notifications').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(20).execute()
+        response = supabase.table('scolding_notifications').select('*').execute()
+        #response = supabase.table('scolding_notifications').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(20).execute()
+        print(f"Debug: Query response: {response}")
+        print(f"Debug: Found {len(response.data)} notifications")
         
         return jsonify({
             "notifications": response.data
         }), 200
         
     except Exception as e:
+        print(f"Debug: Error in get_scolding_notifications: {e}")
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route('/api/chat-history', methods=['GET'])
+@bp.route('/chat-history', methods=['GET'])
 @require_auth
 def get_chat_history() -> Response | tuple[Response, int]:
     """
